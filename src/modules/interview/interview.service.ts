@@ -545,7 +545,44 @@ Return the response as a JSON object with this structure:
     sessionId: string,
     userId: string,
   ): Promise<InterviewSession> {
-    return this.validateSessionOwnership(sessionId, userId);
+    const session = await this.validateSessionOwnership(sessionId, userId);
+
+    // Load answers and build evaluations if session is completed
+    if (session.status === InterviewSessionStatus.COMPLETED) {
+      const answers = await this.answerRepository.find({
+        where: { sessionId },
+        order: { questionIndex: 'ASC' },
+      });
+
+      const evaluations = answers
+        .filter((a) => a.evaluation)
+        .map((a) => ({
+          questionIndex: a.questionIndex,
+          score: a.evaluation!.score,
+          feedback: a.evaluation!.feedback,
+          strengths: a.evaluation!.strengths,
+          weaknesses: a.evaluation!.weaknesses,
+        }));
+
+      if (evaluations.length > 0) {
+        const scores = evaluations.map((e) => e.score);
+        const overallScore =
+          scores.reduce((sum, score) => sum + score, 0) / scores.length;
+
+        // Add evaluations data to session (for DTO response)
+        Object.assign(session, {
+          evaluations,
+          overallScore,
+          summary: `Completed interview with ${evaluations.length} questions evaluated. Average score: ${overallScore.toFixed(1)}/10.`,
+          recommendations: evaluations
+            .flatMap((e) => e.weaknesses)
+            .filter((w, i, arr) => arr.indexOf(w) === i) // Remove duplicates
+            .slice(0, 5), // Top 5 recommendations
+        });
+      }
+    }
+
+    return session;
   }
 
   async getSessionAnswers(
@@ -561,11 +598,50 @@ Return the response as a JSON object with this structure:
   }
 
   async getUserSessions(userId: string): Promise<InterviewSession[]> {
-    return this.sessionRepository.find({
+    const sessions = await this.sessionRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
       relations: ['interview'],
     });
+
+    // Load answers and build evaluations for each session
+    for (const session of sessions) {
+      if (session.status === InterviewSessionStatus.COMPLETED) {
+        const answers = await this.answerRepository.find({
+          where: { sessionId: session.id },
+          order: { questionIndex: 'ASC' },
+        });
+
+        const evaluations = answers
+          .filter((a) => a.evaluation)
+          .map((a) => ({
+            questionIndex: a.questionIndex,
+            score: a.evaluation!.score,
+            feedback: a.evaluation!.feedback,
+            strengths: a.evaluation!.strengths,
+            weaknesses: a.evaluation!.weaknesses,
+          }));
+
+        if (evaluations.length > 0) {
+          const scores = evaluations.map((e) => e.score);
+          const overallScore =
+            scores.reduce((sum, score) => sum + score, 0) / scores.length;
+
+          // Add evaluations data to session (for DTO response)
+          Object.assign(session, {
+            evaluations,
+            overallScore,
+            summary: `Completed interview with ${evaluations.length} questions evaluated. Average score: ${overallScore.toFixed(1)}/10.`,
+            recommendations: evaluations
+              .flatMap((e) => e.weaknesses)
+              .filter((w, i, arr) => arr.indexOf(w) === i) // Remove duplicates
+              .slice(0, 5), // Top 5 recommendations
+          });
+        }
+      }
+    }
+
+    return sessions;
   }
 
   private async validateSessionOwnership(

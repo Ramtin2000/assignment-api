@@ -118,6 +118,50 @@ export class InterviewController {
     return await this.interviewService.getUserInterviews(req.user.id);
   }
 
+  @Get('sessions')
+  @ApiOperation({
+    summary: 'Get all interview sessions for the authenticated user',
+    description: 'Returns a list of all interview sessions created by the user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of interview sessions retrieved successfully',
+    type: [SessionResponseDto],
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async getSessions(
+    @Request() req: AuthenticatedRequest,
+  ): Promise<InterviewSession[]> {
+    return await this.interviewService.getUserSessions(req.user.id);
+  }
+
+  @Get('sessions/:sessionId')
+  @ApiOperation({
+    summary: 'Get a specific interview session by ID',
+    description:
+      'Returns session details with answers and evaluations if completed',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Interview session retrieved successfully',
+    type: SessionResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Interview session not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async getSession(
+    @Request() req: AuthenticatedRequest,
+    @Param('sessionId') sessionId: string,
+  ): Promise<InterviewSession> {
+    return await this.interviewService.getSessionById(sessionId, req.user.id);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get a specific interview by ID',
@@ -192,50 +236,6 @@ export class InterviewController {
       skill: question.skill || 'general',
       difficulty: question.difficulty || 'intermediate',
     };
-  }
-
-  @Get('sessions')
-  @ApiOperation({
-    summary: 'Get all interview sessions for the authenticated user',
-    description: 'Returns a list of all interview sessions created by the user',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'List of interview sessions retrieved successfully',
-    type: [SessionResponseDto],
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  async getSessions(
-    @Request() req: AuthenticatedRequest,
-  ): Promise<InterviewSession[]> {
-    return await this.interviewService.getUserSessions(req.user.id);
-  }
-
-  @Get('sessions/:sessionId')
-  @ApiOperation({
-    summary: 'Get a specific interview session by ID',
-    description:
-      'Returns session details with answers and evaluations if completed',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Interview session retrieved successfully',
-    type: SessionResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Interview session not found',
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  async getSession(
-    @Request() req: AuthenticatedRequest,
-    @Param('sessionId') sessionId: string,
-  ): Promise<InterviewSession> {
-    return await this.interviewService.getSessionById(sessionId, req.user.id);
   }
 
   @Get('sessions/:sessionId/answers')
