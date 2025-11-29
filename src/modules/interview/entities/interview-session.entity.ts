@@ -60,6 +60,60 @@ export class InterviewSession {
   @OneToMany(() => Answer, (answer) => answer.session)
   answers: Answer[];
 
+  /**
+   * Stored overall interview score (0-10), derived from per-question scores
+   * and/or AI evaluation. This is persisted so we can show it efficiently
+   * in dashboards without recalculating each time.
+   */
+  @Column({ type: 'float', nullable: true })
+  overallScore: number | null;
+
+  /**
+   * AI-generated, interview-level summary describing the candidate's
+   * overall performance across all questions.
+   */
+  @Column({ type: 'text', nullable: true })
+  summary: string | null;
+
+  /**
+   * AI-generated, interview-level recommendations for improvement.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  recommendations: string[] | null;
+
+  /**
+   * Calculated metrics per skill, e.g.:
+   * [
+   *   { skill: 'React', averageScore: 8.2, questionCount: 3 }
+   * ]
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  skillBreakdown: Array<{
+    skill: string;
+    averageScore: number;
+    questionCount: number;
+  }> | null;
+
+  /**
+   * Calculated metrics per question category, e.g. conceptual / design.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  categoryBreakdown: Array<{
+    category: string;
+    averageScore: number;
+    questionCount: number;
+  }> | null;
+
+  /**
+   * Aggregate performance metrics for the interview: min, max, median score.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  performanceMetrics: {
+    min: number;
+    max: number;
+    median: number;
+  } | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

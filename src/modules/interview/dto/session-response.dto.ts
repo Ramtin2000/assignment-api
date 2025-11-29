@@ -52,4 +52,60 @@ export class SessionResponseDto {
 
   @ApiProperty({ example: 8.2, required: false })
   overallScore?: number;
+
+  @ApiProperty({
+    example:
+      'Overall, the candidate demonstrated strong understanding of core concepts with a few areas for deeper exploration.',
+    required: false,
+  })
+  summary?: string;
+
+  @ApiProperty({
+    example: [
+      'Review advanced React performance optimization techniques.',
+      'Practice explaining system design trade-offs more concretely.',
+    ],
+    required: false,
+    type: [String],
+  })
+  recommendations?: string[];
+
+  @ApiProperty({
+    description: 'Average score and question count per skill',
+    required: false,
+    example: [
+      { skill: 'React', averageScore: 8.5, questionCount: 3 },
+      { skill: 'Node.js', averageScore: 7.8, questionCount: 2 },
+    ],
+  })
+  skillBreakdown?: Array<{
+    skill: string;
+    averageScore: number;
+    questionCount: number;
+  }>;
+
+  @ApiProperty({
+    description: 'Average score and question count per category',
+    required: false,
+    example: [
+      { category: 'conceptual', averageScore: 8.2, questionCount: 3 },
+      { category: 'design', averageScore: 7.5, questionCount: 2 },
+    ],
+  })
+  categoryBreakdown?: Array<{
+    category: string;
+    averageScore: number;
+    questionCount: number;
+  }>;
+
+  @ApiProperty({
+    description: 'Aggregate score distribution for the interview',
+    required: false,
+    example: { min: 6.5, max: 9.0, median: 8.2 },
+  })
+  performanceMetrics?: {
+    min: number;
+    max: number;
+    median: number;
+  };
 }

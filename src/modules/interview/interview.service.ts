@@ -448,7 +448,7 @@ Return the response as a JSON object with this structure:
     const session = await this.validateSessionOwnership(sessionId, userId);
 
     if (session.status === InterviewSessionStatus.COMPLETED) {
-      // Return existing evaluations
+      // Return existing evaluations and stored interview-level data
       const answers = await this.answerRepository.find({
         where: { sessionId },
         order: { questionIndex: 'ASC' },
@@ -461,19 +461,55 @@ Return the response as a JSON object with this structure:
           ...a.evaluation!,
         }));
 
-      // Calculate overall score from existing evaluations
+      // Calculate overall score and metrics from existing evaluations
       const scores = evaluations.map((e) => e.score);
-      const overallScore =
+      const computedOverallScore =
         scores.length > 0
           ? scores.reduce((sum, score) => sum + score, 0) / scores.length
           : 0;
+
+      const interview = await this.interviewRepository.findOne({
+        where: { id: session.interviewId },
+      });
+
+      if (interview && evaluations.length > 0) {
+        const metrics = this.calculateInterviewMetrics(
+          interview.questions,
+          evaluations.map((e) => ({
+            questionIndex: e.questionIndex,
+            score: e.score,
+          })),
+        );
+
+        // Backfill stored fields if missing (backward compatibility)
+        if (session.overallScore == null) {
+          session.overallScore = computedOverallScore;
+        }
+        if (!session.skillBreakdown) {
+          session.skillBreakdown = metrics.skillBreakdown;
+        }
+        if (!session.categoryBreakdown) {
+          session.categoryBreakdown = metrics.categoryBreakdown;
+        }
+        if (!session.performanceMetrics) {
+          session.performanceMetrics = metrics.performanceMetrics;
+        }
+
+        await this.sessionRepository.save(session);
+      }
+
+      const overallScore = session.overallScore ?? computedOverallScore;
+      const summary =
+        session.summary ||
+        'Interview already completed. Overall results are available.';
+      const recommendations = session.recommendations || [];
 
       return {
         session,
         evaluations,
         overallScore,
-        summary: 'Interview already completed',
-        recommendations: [],
+        summary,
+        recommendations,
       };
     }
 
@@ -510,6 +546,15 @@ Return the response as a JSON object with this structure:
       answerData,
     );
 
+    // Calculate aggregate metrics from evaluations
+    const metrics = this.calculateInterviewMetrics(
+      questions,
+      evaluationResult.evaluations.map((e) => ({
+        questionIndex: e.questionIndex,
+        score: e.score,
+      })),
+    );
+
     // Store evaluations in answers
     for (const evaluation of evaluationResult.evaluations) {
       const answer = answers.find(
@@ -525,6 +570,14 @@ Return the response as a JSON object with this structure:
         await this.answerRepository.save(answer);
       }
     }
+
+    // Update session with interview-level results
+    session.overallScore = evaluationResult.overallScore;
+    session.summary = evaluationResult.summary;
+    session.recommendations = evaluationResult.recommendations;
+    session.skillBreakdown = metrics.skillBreakdown;
+    session.categoryBreakdown = metrics.categoryBreakdown;
+    session.performanceMetrics = metrics.performanceMetrics;
 
     // Update session status
     session.status = InterviewSessionStatus.COMPLETED;
@@ -566,18 +619,80 @@ Return the response as a JSON object with this structure:
 
       if (evaluations.length > 0) {
         const scores = evaluations.map((e) => e.score);
-        const overallScore =
+        const computedOverallScore =
           scores.reduce((sum, score) => sum + score, 0) / scores.length;
 
-        // Add evaluations data to session (for DTO response)
+        // Prefer stored values, fall back to computed ones for backward compatibility
+        const overallScore = session.overallScore ?? computedOverallScore;
+        let {
+          summary,
+          recommendations,
+          skillBreakdown,
+          categoryBreakdown,
+          performanceMetrics,
+        } = session as InterviewSession & {
+          summary?: string | null;
+          recommendations?: string[] | null;
+          skillBreakdown?: Array<{
+            skill: string;
+            averageScore: number;
+            questionCount: number;
+          }> | null;
+          categoryBreakdown?: Array<{
+            category: string;
+            averageScore: number;
+            questionCount: number;
+          }> | null;
+          performanceMetrics?: {
+            min: number;
+            max: number;
+            median: number;
+          } | null;
+        };
+
+        // If metrics were not stored yet, calculate them on the fly
+        if (!skillBreakdown || !categoryBreakdown || !performanceMetrics) {
+          const interview = await this.interviewRepository.findOne({
+            where: { id: session.interviewId },
+          });
+
+          if (interview) {
+            const metrics = this.calculateInterviewMetrics(
+              interview.questions,
+              evaluations.map((e) => ({
+                questionIndex: e.questionIndex,
+                score: e.score,
+              })),
+            );
+            skillBreakdown = skillBreakdown || metrics.skillBreakdown;
+            categoryBreakdown = categoryBreakdown || metrics.categoryBreakdown;
+            performanceMetrics =
+              performanceMetrics || metrics.performanceMetrics;
+          }
+        }
+
+        if (!summary) {
+          summary = `Completed interview with ${evaluations.length} questions evaluated. Average score: ${overallScore.toFixed(
+            1,
+          )}/10.`;
+        }
+
+        if (!recommendations) {
+          recommendations = evaluations
+            .flatMap((e) => e.weaknesses)
+            .filter((w, i, arr) => arr.indexOf(w) === i)
+            .slice(0, 5);
+        }
+
+        // Add evaluations and interview-level data to session (for DTO response)
         Object.assign(session, {
           evaluations,
           overallScore,
-          summary: `Completed interview with ${evaluations.length} questions evaluated. Average score: ${overallScore.toFixed(1)}/10.`,
-          recommendations: evaluations
-            .flatMap((e) => e.weaknesses)
-            .filter((w, i, arr) => arr.indexOf(w) === i) // Remove duplicates
-            .slice(0, 5), // Top 5 recommendations
+          summary,
+          recommendations,
+          skillBreakdown,
+          categoryBreakdown,
+          performanceMetrics,
         });
       }
     }
@@ -624,24 +739,198 @@ Return the response as a JSON object with this structure:
 
         if (evaluations.length > 0) {
           const scores = evaluations.map((e) => e.score);
-          const overallScore =
+          const computedOverallScore =
             scores.reduce((sum, score) => sum + score, 0) / scores.length;
 
-          // Add evaluations data to session (for DTO response)
+          const overallScore = session.overallScore ?? computedOverallScore;
+          let {
+            summary,
+            recommendations,
+            skillBreakdown,
+            categoryBreakdown,
+            performanceMetrics,
+          } = session as InterviewSession & {
+            summary?: string | null;
+            recommendations?: string[] | null;
+            skillBreakdown?: Array<{
+              skill: string;
+              averageScore: number;
+              questionCount: number;
+            }> | null;
+            categoryBreakdown?: Array<{
+              category: string;
+              averageScore: number;
+              questionCount: number;
+            }> | null;
+            performanceMetrics?: {
+              min: number;
+              max: number;
+              median: number;
+            } | null;
+          };
+
+          if (!skillBreakdown || !categoryBreakdown || !performanceMetrics) {
+            const interview = session.interview;
+            if (interview) {
+              const metrics = this.calculateInterviewMetrics(
+                interview.questions,
+                evaluations.map((e) => ({
+                  questionIndex: e.questionIndex,
+                  score: e.score,
+                })),
+              );
+              skillBreakdown = skillBreakdown || metrics.skillBreakdown;
+              categoryBreakdown =
+                categoryBreakdown || metrics.categoryBreakdown;
+              performanceMetrics =
+                performanceMetrics || metrics.performanceMetrics;
+            }
+          }
+
+          if (!summary) {
+            summary = `Completed interview with ${evaluations.length} questions evaluated. Average score: ${overallScore.toFixed(
+              1,
+            )}/10.`;
+          }
+
+          if (!recommendations) {
+            recommendations = evaluations
+              .flatMap((e) => e.weaknesses)
+              .filter((w, i, arr) => arr.indexOf(w) === i)
+              .slice(0, 5);
+          }
+
+          // Add evaluations data and interview-level metrics to session (for DTO response)
           Object.assign(session, {
             evaluations,
             overallScore,
-            summary: `Completed interview with ${evaluations.length} questions evaluated. Average score: ${overallScore.toFixed(1)}/10.`,
-            recommendations: evaluations
-              .flatMap((e) => e.weaknesses)
-              .filter((w, i, arr) => arr.indexOf(w) === i) // Remove duplicates
-              .slice(0, 5), // Top 5 recommendations
+            summary,
+            recommendations,
+            skillBreakdown,
+            categoryBreakdown,
+            performanceMetrics,
           });
         }
       }
     }
 
     return sessions;
+  }
+
+  /**
+   * Calculate aggregate interview metrics from per-question evaluations.
+   * - Skill breakdown: average score and question count per skill
+   * - Category breakdown: average score and question count per category
+   * - Performance metrics: min, max, median score across all questions
+   */
+  private calculateInterviewMetrics(
+    questions: InterviewQuestion[],
+    evaluations: Array<{ questionIndex: number; score: number }>,
+  ): {
+    skillBreakdown: Array<{
+      skill: string;
+      averageScore: number;
+      questionCount: number;
+    }>;
+    categoryBreakdown: Array<{
+      category: string;
+      averageScore: number;
+      questionCount: number;
+    }>;
+    performanceMetrics: {
+      min: number;
+      max: number;
+      median: number;
+    };
+  } {
+    const skillStats = new Map<string, { totalScore: number; count: number }>();
+    const categoryStats = new Map<
+      string,
+      { totalScore: number; count: number }
+    >();
+
+    const scores: number[] = [];
+
+    for (const evaluation of evaluations) {
+      const question =
+        questions[evaluation.questionIndex] ??
+        questions.find((_, idx) => idx === evaluation.questionIndex);
+      if (!question) {
+        continue;
+      }
+
+      const score = evaluation.score ?? 0;
+      scores.push(score);
+
+      const skillKey = question.skill || 'Unknown';
+      const categoryKey = question.category || 'Unknown';
+
+      const skillEntry = skillStats.get(skillKey) || {
+        totalScore: 0,
+        count: 0,
+      };
+      skillEntry.totalScore += score;
+      skillEntry.count += 1;
+      skillStats.set(skillKey, skillEntry);
+
+      const categoryEntry = categoryStats.get(categoryKey) || {
+        totalScore: 0,
+        count: 0,
+      };
+      categoryEntry.totalScore += score;
+      categoryEntry.count += 1;
+      categoryStats.set(categoryKey, categoryEntry);
+    }
+
+    // Build breakdown arrays
+    const skillBreakdown = Array.from(skillStats.entries()).map(
+      ([skill, { totalScore, count }]) => ({
+        skill,
+        averageScore: count > 0 ? totalScore / count : 0,
+        questionCount: count,
+      }),
+    );
+
+    const categoryBreakdown = Array.from(categoryStats.entries()).map(
+      ([category, { totalScore, count }]) => ({
+        category,
+        averageScore: count > 0 ? totalScore / count : 0,
+        questionCount: count,
+      }),
+    );
+
+    // Sort scores to compute median
+    scores.sort((a, b) => a - b);
+
+    let min = 0;
+    let max = 0;
+    let median = 0;
+
+    if (scores.length > 0) {
+      min = scores[0];
+      max = scores[scores.length - 1];
+
+      if (scores.length % 2 === 0) {
+        // even
+        const mid1 = scores.length / 2 - 1;
+        const mid2 = scores.length / 2;
+        median = (scores[mid1] + scores[mid2]) / 2;
+      } else {
+        // odd
+        const midIndex = Math.floor(scores.length / 2);
+        median = scores[midIndex];
+      }
+    }
+
+    return {
+      skillBreakdown,
+      categoryBreakdown,
+      performanceMetrics: {
+        min,
+        max,
+        median,
+      },
+    };
   }
 
   private async validateSessionOwnership(

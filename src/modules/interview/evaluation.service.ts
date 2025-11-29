@@ -26,6 +26,14 @@ export interface BatchEvaluationResult {
   overallScore: number;
   summary: string;
   recommendations: string[];
+  /**
+   * Interview-level strengths aggregated across all questions.
+   */
+  interviewStrengths?: string[];
+  /**
+   * Interview-level weaknesses / areas for improvement aggregated across all questions.
+   */
+  interviewWeaknesses?: string[];
 }
 
 @Injectable()
@@ -109,6 +117,8 @@ export class EvaluationService {
         overallScore: number;
         summary: string;
         recommendations: string[];
+        interviewStrengths?: string[];
+        interviewWeaknesses?: string[];
       };
 
       // Validate response structure
@@ -155,37 +165,47 @@ export class EvaluationService {
     questions: Question[],
     answers: Answer[],
   ): string {
-    let prompt = `Evaluate the following interview answers. Provide comprehensive feedback for each answer and an overall assessment.\n\n`;
-
     // Build question-answer pairs
-    for (let i = 0; i < answers.length; i++) {
-      const answer = answers[i];
-      const question = questions[answer.questionIndex] || questions[i];
+    const questionAnswerPairs = answers
+      .map((answer, i) => {
+        const question = questions[answer.questionIndex] || questions[i];
+        return `Question ${answer.questionIndex + 1}:
+Skill: ${question.skill}
+Question: ${question.question}${question.expectedAnswer ? `\nExpected Answer Context: ${question.expectedAnswer}` : ''}
+Candidate Answer: ${answer.transcription}`;
+      })
+      .join('\n\n');
 
-      prompt += `Question ${answer.questionIndex + 1}:\n`;
-      prompt += `Skill: ${question.skill}\n`;
-      prompt += `Question: ${question.question}\n`;
-      if (question.expectedAnswer) {
-        prompt += `Expected Answer Context: ${question.expectedAnswer}\n`;
-      }
-      prompt += `Candidate Answer: ${answer.transcription}\n\n`;
+    const prompt = `You are evaluating a full technical interview.
+Provide:
+1) Detailed evaluation for each answer (score 0-10, feedback, strengths, weaknesses)
+2) An overall interview score (0-10)
+3) A comprehensive interview-level summary describing overall performance
+4) Interview-level recommendations for improvement
+5) Interview-level strengths and weaknesses aggregated across all questions
+
+Evaluate the following interview answers:
+
+${questionAnswerPairs}
+
+Return your evaluation as a JSON object with this structure (valid JSON only):
+{
+  "evaluations": [
+    {
+      "questionIndex": 0,
+      "score": 8.5,
+      "feedback": "Detailed feedback about the answer",
+      "strengths": ["strength1", "strength2"],
+      "weaknesses": ["weakness1", "weakness2"]
     }
-
-    prompt += `\nReturn your evaluation as a JSON object with this structure:\n`;
-    prompt += `{\n`;
-    prompt += `  "evaluations": [\n`;
-    prompt += `    {\n`;
-    prompt += `      "questionIndex": 0,\n`;
-    prompt += `      "score": 8.5,\n`;
-    prompt += `      "feedback": "Detailed feedback about the answer",\n`;
-    prompt += `      "strengths": ["strength1", "strength2"],\n`;
-    prompt += `      "weaknesses": ["weakness1", "weakness2"]\n`;
-    prompt += `    }\n`;
-    prompt += `  ],\n`;
-    prompt += `  "overallScore": 8.2,\n`;
-    prompt += `  "summary": "Overall assessment of the interview performance",\n`;
-    prompt += `  "recommendations": ["recommendation1", "recommendation2"]\n`;
-    prompt += `}\n`;
+  ],
+  "overallScore": 8.2,
+  "summary": "Overall assessment of the interview performance",
+  "recommendations": ["recommendation1", "recommendation2"],
+  "interviewStrengths": ["overall strength 1", "overall strength 2"],
+  "interviewWeaknesses": ["overall weakness 1", "overall weakness 2"]
+}
+`;
 
     return prompt;
   }
