@@ -130,4 +130,21 @@ export class InterviewController {
   ) {
     return await this.interviewService.completeSession(sessionId, req.user.id);
   }
+
+  @Get('sessions')
+  @ApiOperation({
+    summary: 'Get all interview sessions',
+    description:
+      'Retrieves all interview sessions for the authenticated user with their QAs',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sessions retrieved successfully',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async getAllSessions(@Request() req: AuthenticatedRequest) {
+    return await this.interviewService.getAllSessions(req.user.id);
+  }
 }

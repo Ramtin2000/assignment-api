@@ -80,26 +80,42 @@ export class InterviewService {
     logDto: LogEvaluationDto,
     userId: string,
   ): Promise<InterviewQA> {
+    console.log('[InterviewService] logEvaluation called:', {
+      sessionId: logDto.sessionId,
+      userId,
+      question: logDto.question?.substring(0, 50) + '...',
+      answer: logDto.answer?.substring(0, 50) + '...',
+      score: logDto.score,
+    });
+
     // Verify session belongs to user
     const session = await this.sessionRepository.findOne({
       where: { id: logDto.sessionId, userId },
     });
 
     if (!session) {
+      console.error('[InterviewService] Session not found:', logDto.sessionId);
       throw new NotFoundException('Session not found');
     }
 
-    const qa = this.qaRepository.create({
-      sessionId: logDto.sessionId,
-      question: logDto.question,
-      answer: logDto.answer,
-      evaluation: {
-        score: logDto.score,
-        feedback: logDto.feedback,
-      },
-    });
+    try {
+      const qa = this.qaRepository.create({
+        sessionId: logDto.sessionId,
+        question: logDto.question,
+        answer: logDto.answer,
+        evaluation: {
+          score: logDto.score,
+          feedback: logDto.feedback,
+        },
+      });
 
-    return await this.qaRepository.save(qa);
+      const saved = await this.qaRepository.save(qa);
+      console.log('[InterviewService] QA saved successfully:', saved.id);
+      return saved;
+    } catch (error) {
+      console.error('[InterviewService] Error saving QA:', error);
+      throw error;
+    }
   }
 
   async getSession(
@@ -132,5 +148,13 @@ export class InterviewService {
 
     session.status = 'completed';
     return await this.sessionRepository.save(session);
+  }
+
+  async getAllSessions(userId: string): Promise<InterviewSession[]> {
+    return await this.sessionRepository.find({
+      where: { userId },
+      relations: ['qas'],
+      order: { createdAt: 'DESC' },
+    });
   }
 }
