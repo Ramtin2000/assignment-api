@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './modules/user/user.module';
-import { TranscriptionModule } from './modules/transcription/transcription.module';
 import { InterviewModule } from './modules/interview/interview.module';
 
 @Module({
@@ -25,7 +24,6 @@ import { InterviewModule } from './modules/interview/interview.module';
       logging: process.env.NODE_ENV === 'development',
     }),
     UserModule,
-    TranscriptionModule,
     InterviewModule,
   ],
   controllers: [AppController],
