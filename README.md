@@ -1,6 +1,6 @@
-## Description
+# Interview Platform - Backend API
 
-Assignment API - A NestJS application with secure user authentication using JWT, PostgreSQL database, and Swagger documentation.
+A NestJS application providing secure user authentication, interview management, and real-time AI-powered interview sessions using OpenAI Realtime API.
 
 ## Prerequisites
 
@@ -98,11 +98,10 @@ DB_NAME=assignment_db
 JWT_SECRET=your-secret-key-change-in-production
 
 # Frontend URL (for CORS)
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:3001
 
-# OpenAI API Configuration (for transcription)
-# Use either OPEN_AI_KEY or OPENAI_API_KEY
-OPEN_AI_KEY=your-openai-api-key-here
+# OpenAI API Configuration
+OPENAI_API_KEY=your-openai-api-key-here
 # Optional: OpenAI API base URL (defaults to https://api.openai.com/v1)
 # OPENAI_API_BASE_URL=https://api.openai.com/v1
 
@@ -110,7 +109,11 @@ OPEN_AI_KEY=your-openai-api-key-here
 NODE_ENV=development
 ```
 
-**Important:** Change `JWT_SECRET` to a secure random string in production!
+**Important:**
+
+- Change `JWT_SECRET` to a secure random string in production!
+- Get your OpenAI API key from https://platform.openai.com/api-keys
+- Ensure all database credentials match your PostgreSQL setup
 
 ### 4. Start the Application
 
@@ -310,6 +313,30 @@ Connect to the WebSocket with JWT token in one of these ways:
 ### API Documentation
 
 Swagger UI is available at: http://localhost:3000/api
+
+## Environment Variables Reference
+
+Required environment variables:
+
+| Variable         | Description                      | Example                       | Required                  |
+| ---------------- | -------------------------------- | ----------------------------- | ------------------------- |
+| `PORT`           | Server port                      | `3000`                        | No (default: 3000)        |
+| `DB_HOST`        | Database host                    | `localhost`                   | Yes                       |
+| `DB_PORT`        | Database port                    | `5432`                        | Yes                       |
+| `DB_USERNAME`    | Database username                | `postgres`                    | Yes                       |
+| `DB_PASSWORD`    | Database password                | `postgres`                    | Yes                       |
+| `DB_NAME`        | Database name                    | `assignment_db`               | Yes                       |
+| `JWT_SECRET`     | Secret key for JWT token signing | `your-secret-key`             | Yes                       |
+| `OPENAI_API_KEY` | OpenAI API key for AI features   | `sk-...`                      | Yes                       |
+| `FRONTEND_URL`   | Frontend URL for CORS            | `http://localhost:3001`       | Yes                       |
+| `NODE_ENV`       | Environment mode                 | `development` or `production` | No (default: development) |
+
+**Important Notes:**
+
+- `JWT_SECRET`: Use a strong, random string in production. Generate with: `openssl rand -base64 32`
+- `OPENAI_API_KEY`: Get from https://platform.openai.com/api-keys
+- `FRONTEND_URL`: Must match your frontend URL for CORS to work
+- All database variables must match your PostgreSQL configuration
 
 ## Running the Project
 
