@@ -58,7 +58,6 @@ export class InterviewService {
           session: {
             type: 'realtime',
             model: 'gpt-realtime-mini-2025-10-06' as string,
-            expires_after: 3600, // 1 hour in seconds
           },
         }),
       },
