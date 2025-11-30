@@ -45,6 +45,7 @@ export class InterviewService {
     // Generate ephemeral client token using HTTP client
     // The frontend SDK will handle session configuration
     // We just need to provide a client_secret token
+    // Set expires_after to 1 hour (3600 seconds) to ensure session expires after interview
     const response = await fetch(
       'https://api.openai.com/v1/realtime/client_secrets',
       {
@@ -57,6 +58,7 @@ export class InterviewService {
           session: {
             type: 'realtime',
             model: 'gpt-realtime-mini-2025-10-06' as string,
+            expires_after: 3600, // 1 hour in seconds
           },
         }),
       },
